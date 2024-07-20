@@ -47,6 +47,17 @@
             //replace
             assert(sizeof(kLibMain)==sizeof(kLibNull));
             memcpy(pos,kLibNull,sizeof(kLibNull));
+
+#if UNITY_2021_OR_NEWER
+            const TByte kLibMainSo[] = { 'l', 'i', 'b', 'm', 'a', 'i', 'n', '.', 's', 'o' };
+            const TByte kLibNullSo[] = { 'l', 'i', 'b', 'n', 'u', 'l', 'l', '.', 's', 'o' };
+            pos = std::search(code.data(), code_end, kLibMainSo, kLibMainSo + sizeof(kLibMainSo));
+            while (pos != code_end) { // Loop to replace all occurrences
+                memcpy(pos, kLibNullSo, sizeof(kLibNullSo));
+                pos = std::search(pos + sizeof(kLibNullSo), code_end, kLibMainSo, kLibMainSo + sizeof(kLibMainSo));
+            }
+#endif // UNITY_2021
+
         }
         {//new crc32
             *out_newCrc32=(uint32_t)crc32(crc32(0,0,0),code.data(),(uInt)code.size());
