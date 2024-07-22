@@ -4,3 +4,6 @@
 [submodule "ApkDiffPatch"]
 	path = ApkDiffPatch
 	url = https://github.com/ilinchunjie/ApkDiffPatch.git
+[submodule "project_hook_unity_jni/bhook"]
+	path = project_hook_unity_jni/bhook
+	url = https://github.com/bytedance/bhook.git

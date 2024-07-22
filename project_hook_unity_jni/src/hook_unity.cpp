@@ -7,7 +7,7 @@
 #include <stdlib.h> //exit
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "../xHook/libxhook/jni/xh_core.h"
+#include "../bhook/bytehook/src/main/cpp/include/bytehook.h"
 #include <android/log.h>
 #include <dlfcn.h> // dlopen
 #ifdef __cplusplus
@@ -182,28 +182,33 @@ extern "C" {
     static void* new_dlopen(const char* path,int flags){
         return my_new_dlopen(path,flags,true,false);
     }
-    
 
-    #define HOOK(lib,errValue,symbol){ \
-        if (0!=xh_core_register(lib,#symbol,(void*)new_##symbol,NULL)){ \
-            LOG_ERROR("hook_lib() failed to find function:%s in %s",#symbol,lib); return errValue; } }
+#define BYTE_HOOK_DEF(fn)                                                                                         \
+  static bytehook_stub_t fn##_stub = NULL;                                                                   \
+  static void fn##_hooked_callback(bytehook_stub_t task_stub, int status_code, const char *caller_path_name, \
+                                   const char *sym_name, void *new_func, void *prev_func, void *arg) {       \
+  }
+
+BYTE_HOOK_DEF(stat);
+BYTE_HOOK_DEF(fopen);
+BYTE_HOOK_DEF(open);
+BYTE_HOOK_DEF(dlopen);
 
     static bool hook_lib(const char* libPath){
         LOG_INFO("hook_lib() to hook %s",libPath);
         libPath=getFileName(libPath);
 #if (_IsDebug>=2)
-        xh_core_enable_debug(1);
+        bytehook_set_debug(true);
 #endif
         const bool errValue=false;
-        HOOK(libPath,errValue,stat);
-        HOOK(libPath,errValue,fopen);
-        HOOK(libPath,errValue,open);
-        HOOK(libPath,errValue,dlopen);
-        if(0!= xh_core_refresh(0)){
-            LOG_ERROR("hook_lib() failed to hook %s",libPath);
-            return errValue;
-        }
-        xh_core_clear();
+        stat_stub=bytehook_hook_single(libPath,NULL,"stat",(void*)new_stat,stat_hooked_callback,NULL);
+        if (NULL==stat_stub){ LOG_ERROR("hook_lib() failed to hook stat"); return errValue; }
+        fopen_stub=bytehook_hook_single(libPath,NULL,"fopen",(void*)new_fopen,fopen_hooked_callback,NULL);
+        if (NULL==fopen_stub){ LOG_ERROR("hook_lib() failed to hook fopen"); return errValue; }
+        open_stub=bytehook_hook_single(libPath,NULL,"open",(void*)new_open,open_hooked_callback,NULL);
+        if (NULL==open_stub){ LOG_ERROR("hook_lib() failed to hook open"); return errValue; }
+        dlopen_stub=bytehook_hook_single(libPath,NULL,"dlopen",(void*)new_dlopen,dlopen_hooked_callback,NULL);
+        if (NULL==dlopen_stub){ LOG_ERROR("hook_lib() failed to hook dlopen"); return errValue; }
         return true;
     }
     
@@ -219,6 +224,7 @@ extern "C" {
     }
     
     static bool loadUnityLibs(){
+        bytehook_init(0,false);
         if (!hook_lib(kLibMain)) return false; // loaded in java, only hook
         if (!hook_lib(kLibUnity)) return false; // loaded in java, only hook
         if (!loadUnityLib(kLibIL2cpp,false,false)) return false; // pre-load for il2cpp
