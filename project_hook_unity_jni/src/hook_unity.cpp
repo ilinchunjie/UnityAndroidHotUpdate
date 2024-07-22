@@ -117,6 +117,7 @@ extern "C" {
     
     //stat
     static int new_stat(const char* path,struct stat* file_stat){
+        BYTEHOOK_STACK_SCOPE();
         const int errValue=-1;
         LOG_DEBUG("new_stat() %s",path);
         MAP_PATH(path,errValue);
@@ -125,6 +126,7 @@ extern "C" {
     
     //fopen
     static FILE* new_fopen(const char* path,const char* mode){
+        BYTEHOOK_STACK_SCOPE();
         FILE* const errValue=NULL;
         LOG_DEBUG("new_fopen() %s %s",mode,path);
         MAP_PATH(path,errValue);
@@ -133,6 +135,7 @@ extern "C" {
     
     //open
     static int new_open(const char *path, int flags, ...){
+        BYTEHOOK_STACK_SCOPE();
         const int errValue=-1;
         LOG_DEBUG("new_open() %d %s",flags,path);
         MAP_PATH(path,errValue);
@@ -180,6 +183,7 @@ extern "C" {
     }
     
     static void* new_dlopen(const char* path,int flags){
+        BYTEHOOK_STACK_SCOPE();
         return my_new_dlopen(path,flags,true,false);
     }
 
