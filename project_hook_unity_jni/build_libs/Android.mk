@@ -58,7 +58,6 @@ BHook_Files := \
         $(BHOOK_PATH)/bh_elf.c \
         $(BHOOK_PATH)/bh_hook_manager.c \
         $(BHOOK_PATH)/bh_hook.c \
-        $(BHOOK_PATH)/bh_jni.c \
         $(BHOOK_PATH)/bh_linker_mutex.c \
         $(BHOOK_PATH)/bh_linker.c \
         $(BHOOK_PATH)/bh_log.c  \
