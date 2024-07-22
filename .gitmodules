@@ -3,4 +3,4 @@
 	url = https://github.com/iqiyi/xHook.git
 [submodule "ApkDiffPatch"]
 	path = ApkDiffPatch
-	url = https://github.com/sisong/ApkDiffPatch.git
+	url = https://github.com/ilinchunjie/ApkDiffPatch.git
