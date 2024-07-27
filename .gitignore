@@ -51,3 +51,5 @@ Packages-Update.log
 project_unity_demo/newV/.vscode
 project_unity_demo/newV/Logs
 project_unity_demo/oldV/.idea
+project_unity_demo/oldV/Logs
+.vscode
