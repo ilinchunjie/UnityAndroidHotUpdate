@@ -49,3 +49,5 @@ VirtualApkPatch.layout
 project_unity_demo/oldV/.vscode
 Packages-Update.log
 project_unity_demo/newV/.vscode
+project_unity_demo/newV/Logs
+project_unity_demo/oldV/.idea
