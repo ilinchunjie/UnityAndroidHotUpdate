@@ -37,7 +37,29 @@ extern "C" {
     static  int g_hotApkPathLen=0;
     static char g_hotSoDir[kMaxPathLen+1]={0};
     static  int g_hotSoDirLen=0;
-    
+
+typedef int (*open_t)(const char *, int, mode_t);
+typedef int (*open_real_t)(const char *, int, mode_t);
+typedef int (*open2_t)(const char *, int);
+typedef int (*stat_t)(const char *, struct stat *);
+typedef FILE *(*fopen_t)(const char *, const char *);
+typedef void *(*dlopen_t)(const char *, int);
+
+#define BYTE_HOOK_DEF(fn)                                                                                    \
+  static fn##_t fn##_prev = NULL;                                                                            \
+  static bytehook_stub_t fn##_stub = NULL;                                                                   \
+  static void fn##_hooked_callback(bytehook_stub_t task_stub, int status_code, const char *caller_path_name, \
+                                   const char *sym_name, void *new_func, void *prev_func, void *arg) {       \
+    if (BYTEHOOK_STATUS_CODE_ORIG_ADDR == status_code) {                                                     \
+        fn##_prev = (fn##_t)prev_func;                                                                       \
+    }                                                                                                        \
+  }
+BYTE_HOOK_DEF(stat);
+BYTE_HOOK_DEF(fopen);
+BYTE_HOOK_DEF(open);
+BYTE_HOOK_DEF(open2);
+BYTE_HOOK_DEF(open_real);
+BYTE_HOOK_DEF(dlopen);
     
     static const char*  getFileName(const char* filePath){
         int pathLen=(int)strlen(filePath);
@@ -134,18 +156,37 @@ extern "C" {
     }
     
     //open
-    static int new_open(const char *path, int flags, ...){
+    static int new_open(const char *path, int flags, mode_t modes){
         BYTEHOOK_STACK_SCOPE();
         const int errValue=-1;
         LOG_DEBUG("new_open() %d %s",flags,path);
         MAP_PATH(path,errValue);
         
-        va_list args;
-        va_start(args,flags);
-        int result=::open(path,flags,args);
-        va_end(args);
+        int result = ::open(path,flags,modes);
         return result;
     }
+
+    //open2
+    //static int new_open2(const char *path, int flags){
+    //    BYTEHOOK_STACK_SCOPE();
+    //    const int errValue=-1;
+    //    LOG_DEBUG("new_open2() %d %s",flags,path);
+    //    MAP_PATH(path,errValue);
+    //    
+    //    int result = open2_prev(path,flags);
+    //    return result;
+    //}
+
+    //open_real
+    //static int new_open_real(const char *path, int flags, mode_t modes){
+    //    BYTEHOOK_STACK_SCOPE();
+    //    const int errValue=-1;
+    //    LOG_DEBUG("new_open_real() %d %s",flags,path);
+    //    MAP_PATH(path,errValue);
+    //    
+    //    int result = open_real_prev(path,flags,modes);
+    //    return result;
+    //}
     
 #if (_IsDebug>=2)
     static void _DEBUG_log_libmaps(){
@@ -163,40 +204,28 @@ extern "C" {
     
     //dlopen
     static bool hook_lib(const char* libPath);
-    static void* my_new_dlopen(const char* path,int flags,bool isMustLoad,bool isMustHookOk){
-        void* const errValue=NULL;
-        LOG_DEBUG("new_dlopen() %d %s",flags,path);
-        MAP_PATH(path,errValue);
-        if ((!isMustLoad)&&(!pathIsExists(path)))
-            return errValue;
-        
-        void* result=::dlopen(path,flags);
-        LOG_INFO("dlopen() result 0x%08x %s",(unsigned int)(size_t)result,path);
-        _DEBUG_log_libmaps();
-        
-        if ((result!=errValue)&&isSoDirCanMap){
-            bool ret=hook_lib(path);
-            if ((!ret)&&isMustHookOk)
-                return errValue;
-        }
-        return result;
+    static bool shouldForceLibLoad(const char* libPath){
+        if (strstr(libPath,kLibIL2cpp) != NULL) return true;
+        return false;
     }
     
     static void* new_dlopen(const char* path,int flags){
         BYTEHOOK_STACK_SCOPE();
-        return my_new_dlopen(path,flags,true,false);
+        void* const errValue=NULL;
+        MAP_PATH(path,errValue);
+
+        if (shouldForceLibLoad(path) && !pathIsExists(path)) return errValue;
+
+        void* result=::dlopen(path,flags);
+        LOG_INFO("dlopen() result 0x%08x %s",(unsigned int)(size_t)result,path);
+        _DEBUG_log_libmaps();
+
+        if ((result!=errValue)&&isSoDirCanMap){
+            hook_lib(path);
+        }
+
+        return result;
     }
-
-#define BYTE_HOOK_DEF(fn)                                                                                         \
-  static bytehook_stub_t fn##_stub = NULL;                                                                   \
-  static void fn##_hooked_callback(bytehook_stub_t task_stub, int status_code, const char *caller_path_name, \
-                                   const char *sym_name, void *new_func, void *prev_func, void *arg) {       \
-  }
-
-BYTE_HOOK_DEF(stat);
-BYTE_HOOK_DEF(fopen);
-BYTE_HOOK_DEF(open);
-BYTE_HOOK_DEF(dlopen);
 
     static bool hook_lib(const char* libPath){
         LOG_INFO("hook_lib() to hook %s",libPath);
@@ -207,31 +236,40 @@ BYTE_HOOK_DEF(dlopen);
         const bool errValue=false;
         stat_stub=bytehook_hook_single(libPath,NULL,"stat",(void*)new_stat,stat_hooked_callback,NULL);
         if (NULL==stat_stub){ LOG_ERROR("hook_lib() failed to hook stat"); return errValue; }
+
         fopen_stub=bytehook_hook_single(libPath,NULL,"fopen",(void*)new_fopen,fopen_hooked_callback,NULL);
         if (NULL==fopen_stub){ LOG_ERROR("hook_lib() failed to hook fopen"); return errValue; }
+
         open_stub=bytehook_hook_single(libPath,NULL,"open",(void*)new_open,open_hooked_callback,NULL);
         if (NULL==open_stub){ LOG_ERROR("hook_lib() failed to hook open"); return errValue; }
+
+        //open_real_stub=bytehook_hook_single(libPath,NULL,"__open_real",(void*)new_open_real,open_real_hooked_callback,NULL);
+        //if (NULL==open_real_stub){ LOG_ERROR("hook_lib() failed to hook __open_real"); return errValue; }
+
+        //open2_stub=bytehook_hook_single(libPath,NULL,"__open_2",(void*)new_open2,open2_hooked_callback,NULL);
+        //if (NULL==open2_stub){ LOG_ERROR("hook_lib() failed to hook __open_2"); return errValue; }
+        
         dlopen_stub=bytehook_hook_single(libPath,NULL,"dlopen",(void*)new_dlopen,dlopen_hooked_callback,NULL);
         if (NULL==dlopen_stub){ LOG_ERROR("hook_lib() failed to hook dlopen"); return errValue; }
         return true;
     }
     
     
-    static bool loadUnityLib(const char* libName,bool isMustLoad,bool isMustHookOk){
+    static bool loadUnityLib(const char* libName){
         char libPath[kMaxPathLen+1];
         if (!appendPath(libPath,sizeof(libPath),
                         g_baseSoDir,g_baseSoDirLen,libName,(int)strlen(libName))) return false;
         
         const int flags= RTLD_NOW;
-        void* result=my_new_dlopen(libPath,flags,isMustLoad,isMustHookOk);
-        return (result!=NULL)||(!isMustLoad);
+        void* result=new_dlopen(libPath,flags);
+        return (result!=NULL)||(!shouldForceLibLoad(libPath));
     }
     
     static bool loadUnityLibs(){
         bytehook_init(0,false);
         if (!hook_lib(kLibMain)) return false; // loaded in java, only hook
         if (!hook_lib(kLibUnity)) return false; // loaded in java, only hook
-        if (!loadUnityLib(kLibIL2cpp,false,false)) return false; // pre-load for il2cpp
+        if (!loadUnityLib(kLibIL2cpp)) return false; // pre-load for il2cpp
         //test found : not need pre-load libs for mono
         return true;
     }
